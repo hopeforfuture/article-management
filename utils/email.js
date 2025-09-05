@@ -1,0 +1,71 @@
+const nodemailer = require("nodemailer");
+const pug = require("pug");
+const { htmlToText } = require("html-to-text");
+
+module.exports = class Email {
+  constructor(user, url) {
+    this.to = user.email;
+    this.firstName = user.name.split(" ")[0];
+    this.url = url;
+    this.from = `Manojit Nandi <${process.env.EMAIL_FORM}>`;
+    this.appName = process.env.APPNAME;
+  }
+
+  newTransport() {
+    if (process.env.NODE_ENV === "production") {
+      //Sendgrid
+      return nodemailer.createTransport({
+        service: "SendGrid",
+        auth: {
+          user: process.env.SENDGRID_USERNAME,
+          pass: process.env.SENDGRID_PASSWORD,
+        },
+      });
+    }
+
+    return nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: false, // usually false for testing servers
+      auth: {
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+  }
+
+  async send(template, subject) {
+    // 1) Render HTML based on a pug template
+    const html = pug.renderFile(
+      `${__dirname}/../views/emails/${template}.pug`,
+      {
+        firstName: this.firstName,
+        appName: this.appName,
+        url: this.url,
+        subject,
+      }
+    );
+    // 2) Define email options
+    const mailOptions = {
+      from: this.from,
+      to: this.to,
+      subject,
+      html,
+      text: htmlToText(html),
+    };
+
+    // 3) Create a transport and send email
+    await this.newTransport().sendMail(mailOptions);
+  }
+
+  async sendWelcome() {
+    await this.send("welcome", "Welcome to the Article Manager Family!");
+  }
+
+  async sendPasswordReset() {
+    await this.send(
+      "passwordReset",
+      "Your password reset token (Valid for 10 minutes)"
+    );
+  }
+};
